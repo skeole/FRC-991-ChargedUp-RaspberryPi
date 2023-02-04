@@ -11,14 +11,13 @@
 
 import cv2
 
-from networktables import NetworkTables
 from robotpy_apriltag import AprilTagDetector, AprilTagPoseEstimator
+from networktables import NetworkTables
 
 # import logging
-# logging.basicConfig(level=logging.DEBUG)
-
 import numpy
 import math
+# logging.basicConfig(level=logging.DEBUG)
 
 cap = cv2.VideoCapture(0)
 detector = AprilTagDetector()
@@ -32,24 +31,20 @@ estimator = AprilTagPoseEstimator(AprilTagPoseEstimator.Config(
         360
     ))
 
-i = 0
-
 limit = 200
 minconfidence = 150
 
 draw = False
 
 NetworkTables.initialize(server="10.9.91.2") # IP Address of RoboRio, I think
+                    # might have to be roborio-991-frc.local, I'm not sure
 
 table = NetworkTables.getTable("SmartDashboard")
 
 while (True):
-    i += 1
     success, frame = cap.read()
     
     if (success):
-
-        # print("Frame rate: ", int(cap.get(cv2.CAP_PROP_FPS)), "FPS")
         
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # convert to grayscale
         
@@ -60,19 +55,13 @@ while (True):
         data = []
         
         for result in results:
-            if (result.getCorner(0).x - result.getCorner(2).x) * (result.getCorner(0).x - result.getCorner(2).x) + (result.getCorner(0).y - result.getCorner(2).y) * (result.getCorner(0).y - result.getCorner(2).y) < 10:
-                continue # if the diagonal distance is too small
+            if (result.getCorner(0).x - result.getCorner(2).x) * (result.getCorner(0).x - result.getCorner(2).x) + (result.getCorner(0).y - result.getCorner(2).y) * (result.getCorner(0).y - result.getCorner(2).y) < 10: continue # if the diagonal distance is too small
             
-            if min(result.getCorner(0).x, result.getCorner(1).x, result.getCorner(2).x, result.getCorner(3).x, result.getCorner(0).y, result.getCorner(1).y, result.getCorner(2).y, result.getCorner(3).y) < 50:
-                continue
+            if min(result.getCorner(0).x, result.getCorner(1).x, result.getCorner(2).x, result.getCorner(3).x, result.getCorner(0).y, result.getCorner(1).y, result.getCorner(2).y, result.getCorner(3).y) < 50: continue
             
-            if min(1280 - result.getCorner(0).x, 1280 - result.getCorner(1).x, 1280 - result.getCorner(2).x, 1280 - result.getCorner(3).x, 720 - result.getCorner(0).y, 720 - result.getCorner(1).y, 720 - result.getCorner(2).y, 720 - result.getCorner(3).y) < 15:
-                continue # if we're too close to the edge of the screen
+            if min(1280 - result.getCorner(0).x, 1280 - result.getCorner(1).x, 1280 - result.getCorner(2).x, 1280 - result.getCorner(3).x, 720 - result.getCorner(0).y, 720 - result.getCorner(1).y, 720 - result.getCorner(2).y, 720 - result.getCorner(3).y) < 15: continue # if we're too close to the edge of the screen
             
-            id = result.getId()
-            margin = int(result.getDecisionMargin() * 10 + 0.5) / 10.0
-            
-            if (margin < minconfidence): continue # don't do anything else in the loop
+            if (result.getDecisionMargin() < minconfidence): continue # if not very confident
             
             poses = estimator.estimateOrthogonalIteration(result, 10)
             
@@ -121,7 +110,7 @@ while (True):
                 )
             
             # modular lists (ex. each list of 4 elements is actually one element)
-            data.append(round(id)) # id of the tag
+            data.append(round(result.getId())) # id of the tag
             data.append(round(poses.pose1.rotation().y_degrees, 2)) # how far we need to turn right to see it head on
             data.append(round(poses.pose1.translation().x * 100, 2)) # how far we need to move to right to be dead on with the thing
             data.append(round(poses.pose1.translation().z * 100, 2)) #  z depth, assuming we are looking head on
@@ -133,17 +122,15 @@ while (True):
         )
         
         if (draw):
+
+            # print("Frame rate: ", int(cap.get(cv2.CAP_PROP_FPS)), "FPS")
+            # print(cv2.getWindowImageRect('frame')[2], cv2.getWindowImageRect('frame')[3]) # resolution of camera
             
             print(data)
-            
             print(table.getNumberArray("April", "None"))
         
             cv2.imshow('frame', frame) # puts it in a window  
-            
             cv2.imshow('gray', gray) # puts it in a window  
-            
-            # print(cv2.getWindowImageRect('frame')[2], cv2.getWindowImageRect('frame')[3]) # resolution of camera
-            
         
     else:
         table.putNumberArray(
