@@ -29,7 +29,7 @@ estimator = AprilTagPoseEstimator(AprilTagPoseEstimator.Config(
          # around 7mm for 5mm object to be 720 pixels --> 
         1008, # has to be experimentally determined, but fx and fy are generally the same
         640, # literally just the resolution divided by 2 :D
-        360 # I think
+        360
     ))
 
 i = 0
@@ -74,13 +74,19 @@ while (True):
             
             if (margin < minconfidence): continue # don't do anything else in the loop
             
-            
-            x = int(result.getCenter().x * 10 + 0.5) / 10.0
-            y = int(result.getCenter().y * 10 + 0.5) / 10.0
-            
-            # center of april tag
+            poses = estimator.estimateOrthogonalIteration(result, 10)
             
             if draw:
+                
+                x = int(result.getCenter().x * 10 + 0.5) / 10.0
+                y = int(result.getCenter().y * 10 + 0.5) / 10.0
+                angle1 = 0 - math.atan(poses.pose1.rotation().x_degrees / poses.pose1.rotation().y_degrees)
+                
+                if (poses.pose1.rotation().y_degrees > 0): 
+                    angle1 += math.pi
+                
+                multiplier = math.sqrt(poses.pose1.rotation().x_degrees * poses.pose1.rotation().x_degrees + poses.pose1.rotation().y_degrees * poses.pose1.rotation().y_degrees) / 127.2792206136
+                length = 20 / poses.pose1.translation().z
                 
                 points = []
                 for i in range(4):
@@ -88,7 +94,7 @@ while (True):
                         result.getCorner(i).x, result.getCorner(i).y
                     ])
                 
-                for j in range(4):
+                for j in range(4): # boundary lines
                     cv2.line(
                         frame, 
                         (int(points[j][0] + 0.5), int(points[j][1] + 0.5)), 
@@ -97,42 +103,16 @@ while (True):
                         10
                     )
                 
-                cv2.line(
-                    frame, 
-                    (int(points[0][0] + 0.5), int(points[0][1] + 0.5)), 
-                    (int(points[2][0] + 0.5), int(points[2][1] + 0.5)), 
-                    (0, 0, 255), # BGR Color
-                    10
-                )
+                for i in range(2): # diagonal lines
+                    cv2.line(
+                        frame, 
+                        (int(points[i][0] + 0.5), int(points[i][1] + 0.5)), 
+                        (int(points[i + 2][0] + 0.5), int(points[i + 2][1] + 0.5)), 
+                        (0, 0, 255), # BGR Color
+                        10
+                    )
                 
-                
-                cv2.line(
-                    frame, 
-                    (int(points[1][0] + 0.5), int(points[1][1] + 0.5)), 
-                    (int(points[3][0] + 0.5), int(points[3][1] + 0.5)), 
-                    (0, 0, 255), # BGR Color
-                    10
-                )
-            
-            poses = estimator.estimateOrthogonalIteration(result, 10)
-            
-            # figure out how the x/y/z translate to a length and an angle
-            # length: 1 / z
-            # angle: 
-            # obviously, 0/0 means no angle
-            # y is -90 --> due right
-            # x is +90 --> due up
-            # is it literally just tangent????
-            
-            angle1 = 0 - math.atan(poses.pose1.rotation().x_degrees / poses.pose1.rotation().y_degrees)
-            if (poses.pose1.rotation().y_degrees > 0): 
-                angle1 += math.pi
-            
-            multiplier = math.sqrt(poses.pose1.rotation().x_degrees * poses.pose1.rotation().x_degrees + poses.pose1.rotation().y_degrees * poses.pose1.rotation().y_degrees) / 127.2792206136
-            length = 20 / poses.pose1.translation().z
-            
-            if draw:
-                cv2.line(
+                cv2.line( # 3d line
                     frame, 
                     (int(x + 0.5), int(y + 0.5)), 
                     (int(x + length * math.cos(angle1) * multiplier + 0.5), int(y + length * math.sin(angle1) * multiplier + 0.5)), 
@@ -140,8 +120,12 @@ while (True):
                     10
                 )
             
-            data.append(id) # cannot be a list of lists :(
-                            # however can still do modular lists (ex. each list of 4 elements is actually one element)
+            # modular lists (ex. each list of 4 elements is actually one element)
+            data.append(round(id)) # id of the tag
+            data.append(round(poses.pose1.rotation().y_degrees, 2)) # how far we need to turn right to see it head on
+            data.append(round(poses.pose1.translation().x * 100, 2)) # how far we need to move to right to be dead on with the thing
+            data.append(round(poses.pose1.translation().z * 100, 2)) #  z depth, assuming we are looking head on
+            # all measurements in degrees or cm
             
         table.putNumberArray(
             "April", 
@@ -149,20 +133,17 @@ while (True):
         )
         
         if (draw):
+            
             print(data)
+            
+            print(table.getNumberArray("April", "None"))
         
-        # flippedframe = cv2.flip(frame, 1)
-        
-        # flippedgray = cv2.cvtColor(flippedframe, cv2.COLOR_BGR2GRAY) # convert to grayscale
-        
-        # flippedgray = cv2.inRange(flippedgray, numpy.mat([limit]), numpy.mat([255]))
-
-        
-        cv2.imshow('frame', frame) # puts it in a window  
-        
-        # cv2.imshow('gray', flippedgray) # puts it in a window  
-        
-        # print(cv2.getWindowImageRect('frame')[2], cv2.getWindowImageRect('frame')[3])
+            cv2.imshow('frame', frame) # puts it in a window  
+            
+            cv2.imshow('gray', gray) # puts it in a window  
+            
+            # print(cv2.getWindowImageRect('frame')[2], cv2.getWindowImageRect('frame')[3]) # resolution of camera
+            
         
     else:
         table.putNumberArray(
